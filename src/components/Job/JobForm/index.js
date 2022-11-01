@@ -7,7 +7,7 @@ import { ref, uploadBytes, getDownloadURL, uploadBytesResumable } from "firebase
 
 import { collection, addDoc, serverTimestamp } from "firebase/firestore"; 
 import { useNavigate } from "react-router-dom";
-
+import axios from "axios";
 
 const initState = { 
     title: "",
@@ -89,6 +89,22 @@ const JobForm = () => {
         
    };
 
+
+   async function stripePayment2() {
+
+    localStorage.setItem("jobDetails", JSON.stringify(jobDetails));
+    await axios.post(
+         //"https://i7h3rg.sse.codesandbox.io/create-checkout-session", sandbox server
+         "https://example-r8t8.onrender.com/create-checkout-session",
+         { price: "test" }
+     ).then((res)=>{
+          console.log(res?.data)
+          window.location.href = res?.data?.url;
+     })
+     
+
+
+ }
     
     return(
         <>
@@ -123,7 +139,7 @@ const JobForm = () => {
           
                 <Box color="red" width="100%" display="flex" justifyContent="space-between" alignItems="center">
                     <Typography>*Required Fields</Typography>
-                    <Button 
+                    <Button onClick={stripePayment2}
                     variant="contained" type="submit" disableElevation color="primary"  >
                     
                         
