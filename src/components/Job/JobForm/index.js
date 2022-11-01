@@ -1,19 +1,34 @@
 import React, { useEffect } from "react";
-import { Box, Button, Grid, FilledInput, Select, MenuItem, Typography, makeStyles, CircularProgress } from "@material-ui/core";
+import {
+  Box,
+  Button,
+  Grid,
+  FilledInput,
+  Select,
+  MenuItem,
+  Typography,
+  makeStyles,
+  CircularProgress,
+} from "@material-ui/core";
 import { useState } from "react";
-import { Form } from 'react-bootstrap';
+import { Form } from "react-bootstrap";
 import { app, db, storage } from "../../firebase/config";
-import { ref, uploadBytes, getDownloadURL, uploadBytesResumable } from "firebase/storage";
+import {
+  ref,
+  uploadBytes,
+  getDownloadURL,
+  uploadBytesResumable,
+} from "firebase/storage";
 
-import { collection, addDoc, serverTimestamp } from "firebase/firestore"; 
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 
-const initState = { 
-    title: "",
-    type: "Full Time",
-    companyName: "",
-    /*location: "Remote",
+const initState = {
+  title: "",
+  type: "Full Time",
+  companyName: "",
+  /*location: "Remote",
     companyUrl: "",
     country: "",
     city: "",
@@ -22,137 +37,172 @@ const initState = {
     description: "",
     salarymin: "",
     salarymax: "",*/
-    }
+};
 
 const JobForm = () => {
+  const [jobDetails, setJobDetails] = useState(initState);
+  const { title, type, companyName } = jobDetails;
+  const [file, setFile] = useState(null);
+  const [progres, setProgres] = useState(null);
+  const [errors, setErrors] = useState({});
+  const [isSubmit, setIsSubmit] = useState(false);
 
-    const [jobDetails, setJobDetails] = useState(initState);
-    const { title, type, companyName} = jobDetails
-    const [file, setFile] = useState(null);
-    const [progres, setProgres] = useState(null);
-    const [errors, setErrors] = useState({});
-    const [isSubmit, setIsSubmit] = useState(false);
-  
-    const navigate = useNavigate();
+  const navigate = useNavigate();
 
+  const [image, setImage] = useState(null);
+  const [url, setUrl] = useState(null);
 
-    const [image, setImage] = useState(null);
-    const [url, setUrl] = useState(null);
+  useEffect(() => {
+    const uploadFile = () => {
+      const name = new Date().getTime() + file.name;
+      const storageRef = ref(storage, file.name);
+      const uploadTask = uploadBytesResumable(storageRef, file);
 
-    useEffect(() => {
-        const uploadFile = () =>{
-            const name =  new Date().getTime() + file.name;
-            const storageRef = ref(storage, file.name);
-            const uploadTask = uploadBytesResumable(storageRef, file);
-            
-            uploadTask.on("state_changed", (snapshot) => {
-                const progres = (snapshot.bytesTransferred/snapshot.totalBytes)*100;
-                setProgres(progres);
-                switch(snapshot.state){
-                    case "paused":
-                        console.log("Upload is Pause");
-                        break;
-                    case "running":
-                        console.log("Runnings bish");
-                        break;
-                    default:
-                        break;
-                }
-            }, (error) =>{
-                console.log(error)
-            },
-            () =>{
-                getDownloadURL(uploadTask.snapshot.ref).then((downloadURL)=>{
-                    setJobDetails((prev) => ({...prev, img: downloadURL}));
-                })
-            }
-            );
-        };
-        file && uploadFile();
-    }, [file])
-
-   
-    const handleChange = (e) => {
-       setJobDetails({...jobDetails, [e.target.name]: e.target.value})
+      uploadTask.on(
+        "state_changed",
+        (snapshot) => {
+          const progres =
+            (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          setProgres(progres);
+          switch (snapshot.state) {
+            case "paused":
+              console.log("Upload is Pause");
+              break;
+            case "running":
+              console.log("Runnings bish");
+              break;
+            default:
+              break;
+          }
+        },
+        (error) => {
+          console.log(error);
+        },
+        () => {
+          getDownloadURL(uploadTask.snapshot.ref).then((downloadURL) => {
+            setJobDetails((prev) => ({ ...prev, img: downloadURL }));
+          });
+        }
+      );
     };
+    file && uploadFile();
+  }, [file]);
 
+  const handleChange = (e) => {
+    setJobDetails({ ...jobDetails, [e.target.name]: e.target.value });
+  };
 
-
-   const handleSubmit = async (e) =>{
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmit(true);
-        await addDoc(collection(db, "jobs"), {
-            ...jobDetails,
-            timestamp: serverTimestamp()
-        })
-        navigate("/");
-        
-   };
 
+    try {
+      const stripeResponse = await stripePayment2();
 
-   async function stripePayment2() {
+      await addDoc(collection(db, "jobs"), {
+        ...jobDetails,
+        timestamp: serverTimestamp(),
+        payment_intent: stripeResponse.data.payment_intent,
+        status: "DRAFT",
+      });
 
+      window.location.href = stripeResponse?.data?.url;
+    } catch (err) {
+      console.log(err);
+    }
+
+    // navigate("/");
+  };
+
+  async function stripePayment2() {
     localStorage.setItem("jobDetails", JSON.stringify(jobDetails));
-    await axios.post(
-         //"https://i7h3rg.sse.codesandbox.io/create-checkout-session", sandbox server
-         "https://example-r8t8.onrender.com/create-checkout-session",
-         { price: "test" }
-     ).then((res)=>{
-          console.log(res?.data)
-          window.location.href = res?.data?.url;
-     })
-     
 
+    try {
+      const response = await axios.post(
+        //"https://i7h3rg.sse.codesandbox.io/create-checkout-session", sandbox server
+        //  "https://example-r8t8.onrender.com/create-checkout-session",
+        "http://localhost:3001/create-checkout-session",
+        { price: "test" }
+      );
+      console.log("Resposne::", response);
+      return response;
+    } catch (err) {
+      console.log("Error::", err);
+    }
+    return null;
+  }
 
- }
-    
-    return(
-        <>
-           
+  return (
+    <>
+      <div className="container mt-5 mb-5">
+        <form onSubmit={handleSubmit}>
+          <Grid container spacing={2}>
+            <Grid item xs={6}>
+              <FilledInput
+                onChange={handleChange}
+                name="title"
+                value={jobDetails.title}
+                autoComplete="off"
+                placeholder="Job Title*"
+                disableUnderline
+                fullWidth
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <Select
+                onChange={handleChange}
+                name="type"
+                value={jobDetails.type}
+                fullWidth
+                disableUnderline
+                variant="filled"
+              >
+                <MenuItem value="Full Time">Full Time</MenuItem>
+                <MenuItem value="Part time">Part time</MenuItem>
+                <MenuItem value="Contract">Contract</MenuItem>
+              </Select>
+            </Grid>
+            <Grid item xs={6}>
+              <FilledInput
+                onChange={handleChange}
+                name="companyName"
+                value={jobDetails.companyName}
+                autoComplete="off"
+                placeholder="Company Name*"
+                disableUnderline
+                fullWidth
+              />
+            </Grid>
+            <Grid item xs={6}>
+              <input
+                label="Upload"
+                type="file"
+                onChange={(e) => setFile(e.target.files[0])}
+              />
+            </Grid>
+          </Grid>
 
-        
-
-            <div className="container mt-5 mb-5">
-            <form onSubmit={handleSubmit}>
-                <Grid container spacing={2}>
-                    <Grid item xs={6}>
-                        <FilledInput onChange={handleChange}  name="title" value={jobDetails.title} autoComplete="off" placeholder="Job Title*" disableUnderline fullWidth />
-                    </Grid>
-                    <Grid item xs={6}>
-                        <Select onChange={handleChange} name="type" value={jobDetails.type} fullWidth disableUnderline variant = "filled">
-                            <MenuItem value="Full Time">Full Time</MenuItem>
-                            <MenuItem value="Part time">Part time</MenuItem>
-                            <MenuItem value="Contract">Contract</MenuItem>
-                        </Select>
-                    </Grid>
-                    <Grid item xs={6}>
-                        <FilledInput onChange={handleChange}  name="companyName" value={jobDetails.companyName} autoComplete="off" placeholder="Company Name*" disableUnderline fullWidth />
-                    </Grid>
-                    <Grid item xs={6}>
-                        <input label="Upload" type="file" onChange={(e) => setFile(e.target.files[0])}/>
-
-                    </Grid>
-                 
-                   
-                </Grid>
-          
-          
-                <Box color="red" width="100%" display="flex" justifyContent="space-between" alignItems="center">
-                    <Typography>*Required Fields</Typography>
-                    <Button onClick={stripePayment2}
-                    variant="contained" type="submit" disableElevation color="primary"  >
-                    
-                        
-                                "Post Job"
-                     
-                        </Button>
-                </Box>
-               
-                </form>
-                </div>
-              
-           </>
-    )
-}
+          <Box
+            color="red"
+            width="100%"
+            display="flex"
+            justifyContent="space-between"
+            alignItems="center"
+          >
+            <Typography>*Required Fields</Typography>
+            <Button
+              variant="contained"
+              type="submit"
+              disableElevation
+              color="primary"
+            >
+              "Post Job"
+            </Button>
+          </Box>
+        </form>
+      </div>
+    </>
+  );
+};
 
 export default JobForm;
